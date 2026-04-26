@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>GRID_ZERO // NEURAL BREACH</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; color: #0ff; }
+    #hud { position: absolute; top: 10px; left: 10px; pointer-events: none; line-height: 1.4; text-shadow: 0 0 5px #0ff; }
+    .hud-line { margin: 2px 0; opacity: 0.9; }
+    #loader { position: fixed; inset: 0; background: #000; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; z-index: 999; transition: opacity 0.5s; }
+    #canvas-container { width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="loader">GRID_ZERO // INITIALIZING NEURAL NET...</div>
+  <div id="hud">
+    <div class="hud-line">GRID_ZERO // NEURAL BREACH INITIATED</div>
+    <div class="hud-line">v4.1.9 | NODE STATUS: CONNECTED | SECTOR_7G | UPLINK_OK</div>
+    <div class="hud-line" id="fps-line">FPS: -- | CUBES RENDERED: 0</div>
+    <div class="hud-line">GRID DENSITY: <span id="density">0</span> | ALTITUDE: <span id="alt">0.00</span></div>
+    <div class="hud-line">THREAT LEVEL: <span id="threat">LOW</span> | SECTOR: <span id="sector">[0,0]</span></div>
+    <div class="hud-line" style="margin-top:15px; opacity:0.6;">LMB DRAG ROTATE | RMB DRAG PAN | SCROLL ZOOM</div>
+  </div>
+  <div id="canvas-container"></div>
+
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+
+    // 🔹 CONFIG
+    const CONFIG = {
+      gridSize: 40,
+      cubeSpacing: 2,
+      maxInstances: 40 * 40,
+      renderDistance: 60,
+      updateThrottle: 16, // ~60fps DOM update cap
+      pixelRatioCap: 2
+    };
+
+    // 🔹 DOM CACHE (prevents repeated querySelector)
+    const dom = {
+      fps: document.getElementById('fps-line'),
+      cubes: document.getElementById('fps-line'),
+      density: document.getElementById('density'),
+      alt: document.getElementById('alt'),
+      threat: document.getElementById('threat'),
+      sector: document.getElementById('sector'),
+      loader: document.getElementById('loader')
+    };
+
+    // 🔹 THREE.JS SETUP
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x000510, 0.015);
+
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+    camera.position.set(0, 30, 40);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, CONFIG.pixelRatioCap));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    // 🔹 LIGHTS
+    const ambient = new THREE.AmbientLight(0x0a2a4a, 0.5);
+    scene.add(ambient);
+    const dir = new THREE.DirectionalLight(0x00ffff, 1.2);
+    dir.position.set(10, 20, 10);
+    scene.add(dir);
+
+    // 🔹 INSTANCED GRID (MASSIVE PERFORMANCE BOOST)
+    const geo = new THREE.BoxGeometry(0.9, 0.9, 0.9);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x004466, emissive: 0x001133, roughness: 0.3, metalness: 0.8 });
+    const grid = new THREE.InstancedMesh(geo, mat, CONFIG.maxInstances);
+    grid.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+    const dummy = new THREE.Object3D();
+    let visibleCount = 0;
+    const gridData = [];
+
+    for (let x = 0; x < CONFIG.gridSize; x++) {
+      for (let z = 0; z < CONFIG.gridSize; z++) {
+        const px = (x - CONFIG.gridSize / 2) * CONFIG.cubeSpacing;
+        const pz = (z - CONFIG.gridSize / 2) * CONFIG.cubeSpacing;
+        dummy.position.set(px, 0, pz);
+        dummy.updateMatrix();
+        grid.setMatrixAt(visibleCount, dummy.matrix);
+        gridData.push({ x: px, z: pz, baseY: 0, active: false });
+        visibleCount++;
+      }
+    }
+    grid.count = visibleCount;
+    scene.add(grid);
+
+    // 🔹 CONTROLS (THROTTLED)
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.minDistance = 5;
+    controls.maxDistance = 100;
+
+    // 🔹 PERFORMANCE MONITORING
+    let frameCount = 0, lastTime = performance.now(), fps = 0;
+    let lastDomUpdate = 0;
+
+    // 🔹 RENDER LOOP
+    function animate(time) {
+      requestAnimationFrame(animate);
+      controls.update();
+
+      // FPS Calc
+      frameCount++;
+      if (time >= lastTime + 1000) {
+        fps = frameCount;
+        frameCount = 0;
+        lastTime = time;
+      }
+
+      // Distance-based visibility & smooth height animation
+      const camPos = camera.position;
+      const camDist = Math.sqrt(camPos.x ** 2 + camPos.z ** 2);
+      let visible = 0;
+
+      for (let i = 0; i < gridData.length; i++) {
+        const d = gridData[i];
+        const dist = Math.hypot(d.x - camPos.x, d.z - camPos.z);
+        const inRange = dist < CONFIG.renderDistance;
+
+        if (inRange) {
+          dummy.position.set(d.x, Math.sin(time * 0.001 + i * 0.1) * 0.5, d.z);
+          dummy.updateMatrix();
+          grid.setMatrixAt(i, dummy.matrix);
+          visible++;
+        } else {
+          // Move out of view to hide efficiently
+          dummy.position.set(d.x, -1000, d.z);
+          dummy.updateMatrix();
+          grid.setMatrixAt(i, dummy.matrix);
+        }
+      }
+      grid.instanceMatrix.needsUpdate = true;
+
+      // 🔹 THROTTLED DOM UPDATE (prevents layout thrashing)
+      if (time - lastDomUpdate > CONFIG.updateThrottle) {
+        dom.fps.textContent = `FPS: ${fps} | CUBES RENDERED: ${visible}`;
+        dom.density.textContent = Math.round((visible / CONFIG.maxInstances) * 100);
+        dom.alt.textContent = camPos.y.toFixed(2);
+        dom.sector.textContent = `[${Math.round(camPos.x / 10)},${Math.round(camPos.z / 10)}]`;
+        dom.threat.textContent = camPos.y < 15 ? 'HIGH' : 'LOW';
+        lastDomUpdate = time;
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    // 🔹 ASYNC INIT (prevents loading freeze)
+    setTimeout(() => {
+      dom.loader.style.opacity = '0';
+      setTimeout(() => dom.loader.remove(), 500);
+      animate(0);
+    }, 300);
+
+    // 🔹 RESIZE HANDLER
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
+
