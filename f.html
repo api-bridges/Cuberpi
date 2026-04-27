@@ -1,172 +1,808 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GRID_ZERO // NEURAL BREACH</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
   <style>
-    body { margin: 0; overflow: hidden; background: #000; font-family: 'Courier New', monospace; color: #0ff; }
-    #hud { position: absolute; top: 10px; left: 10px; pointer-events: none; line-height: 1.4; text-shadow: 0 0 5px #0ff; }
-    .hud-line { margin: 2px 0; opacity: 0.9; }
-    #loader { position: fixed; inset: 0; background: #000; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; z-index: 999; transition: opacity 0.5s; }
-    #canvas-container { width: 100vw; height: 100vh; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --acid:    #4422ee;
+      --cyan:    #00ddff;
+      --magenta: #ff1177;
+      --dim:     #0a0830;
+      --bg:      #00000a;
+      --panel:   rgba(2, 2, 20, 0.88);
+    }
+
+    body {
+      background: var(--bg);
+      overflow: hidden;
+      font-family: 'Share Tech Mono', monospace;
+      cursor: crosshair;
+    }
+
+    /* ── SCANLINE OVERLAY ── */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(40,30,200,0.025) 2px,
+        rgba(40,30,200,0.025) 4px
+      );
+      z-index: 9998;
+      animation: scanMove 8s linear infinite;
+    }
+    @keyframes scanMove {
+      from { background-position-y: 0; }
+      to   { background-position-y: 120px; }
+    }
+
+    /* ── VIGNETTE ── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.8) 100%);
+      z-index: 9997;
+    }
+
+    canvas { display: block; }
+
+    /* ── CORNER BRACKETS ── */
+    .corner {
+      position: fixed;
+      width: 36px; height: 36px;
+      pointer-events: none;
+      z-index: 200;
+      border-color: var(--acid);
+      border-style: solid;
+      border-width: 0;
+      opacity: 0.7;
+    }
+    .corner.tl { top: 14px; left: 14px; border-top-width: 2px; border-left-width: 2px; }
+    .corner.tr { top: 14px; right: 14px; border-top-width: 2px; border-right-width: 2px; }
+    .corner.bl { bottom: 14px; left: 14px; border-bottom-width: 2px; border-left-width: 2px; }
+    .corner.br { bottom: 14px; right: 14px; border-bottom-width: 2px; border-right-width: 2px; }
+
+    /* ── TOP HEADER ── */
+    #header {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 20px;
+      background: linear-gradient(180deg, rgba(2,2,18,0.92) 0%, transparent 100%);
+      border-bottom: 1px solid rgba(68,34,238,0.2);
+      z-index: 300;
+      pointer-events: none;
+    }
+    #header .logo {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 900;
+      font-size: 13px;
+      color: var(--acid);
+      letter-spacing: 4px;
+      text-shadow: 0 0 12px var(--acid);
+    }
+    #header .logo span { color: var(--magenta); }
+    #header .status {
+      font-size: 10px;
+      color: var(--acid);
+      opacity: 0.6;
+      letter-spacing: 2px;
+    }
+    #header .status em {
+      font-style: normal;
+      color: var(--cyan);
+      animation: blink 1.2s step-end infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* ── LEFT PANEL ── */
+    #panel {
+      position: fixed;
+      top: 50%;
+      left: 16px;
+      transform: translateY(-50%);
+      background: var(--panel);
+      border: 1px solid rgba(0,255,65,0.25);
+      border-left: 3px solid var(--acid);
+      padding: 14px 16px;
+      width: 230px;
+      z-index: 300;
+      backdrop-filter: blur(4px);
+    }
+    #panel::before {
+      content: '// SYSTEM PANEL';
+      display: block;
+      font-size: 9px;
+      color: var(--acid);
+      opacity: 0.5;
+      letter-spacing: 3px;
+      margin-bottom: 12px;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(0,255,65,0.07);
+    }
+    .row:last-child { border-bottom: none; }
+    .label {
+      font-size: 9px;
+      color: rgba(0,255,65,0.5);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+    }
+    .val {
+      font-size: 11px;
+      color: var(--acid);
+      font-weight: bold;
+      text-shadow: 0 0 8px var(--acid);
+      transition: color 0.1s;
+    }
+    .val.hi { color: var(--magenta); text-shadow: 0 0 8px var(--magenta); }
+    .val.med { color: var(--cyan); text-shadow: 0 0 8px var(--cyan); }
+
+    /* ── BAR METER ── */
+    .bar-wrap { width: 80px; height: 4px; background: rgba(0,255,65,0.1); border-radius: 2px; overflow: hidden; }
+    .bar-fill { height: 100%; background: var(--acid); border-radius: 2px; transition: width 0.3s ease; box-shadow: 0 0 6px var(--acid); }
+
+    /* ── MINI LOG ── */
+    #log {
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      width: 280px;
+      z-index: 300;
+      pointer-events: none;
+    }
+    .log-line {
+      font-size: 9px;
+      color: rgba(0,255,65,0.5);
+      letter-spacing: 1px;
+      line-height: 1.7;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      animation: fadeLog 6s linear forwards;
+    }
+    .log-line .ts { color: var(--cyan); opacity: 0.7; }
+    .log-line .hi { color: var(--magenta); }
+    @keyframes fadeLog {
+      0%  { opacity: 0; transform: translateX(-4px); }
+      5%  { opacity: 1; transform: translateX(0); }
+      80% { opacity: 1; }
+      100%{ opacity: 0; }
+    }
+
+    /* ── BOTTOM RIGHT COORDS ── */
+    #coords {
+      position: fixed;
+      bottom: 16px; right: 16px;
+      font-size: 9px;
+      color: rgba(0,255,65,0.4);
+      letter-spacing: 2px;
+      text-align: right;
+      pointer-events: none;
+      z-index: 300;
+      line-height: 1.8;
+    }
+
+    /* ── COORDINATE LEGEND ── */
+    #coord-legend {
+      position: fixed;
+      top: 50px;
+      right: 16px;
+      background: var(--panel);
+      border: 1px solid rgba(0,255,65,0.25);
+      border-right: 3px solid var(--cyan);
+      padding: 10px 14px;
+      width: 190px;
+      z-index: 300;
+      backdrop-filter: blur(4px);
+      font-size: 9px;
+      line-height: 2;
+      letter-spacing: 1px;
+    }
+    #coord-legend::before {
+      content: '// COORD SYSTEM';
+      display: block;
+      font-size: 9px;
+      color: var(--cyan);
+      opacity: 0.5;
+      letter-spacing: 3px;
+      margin-bottom: 8px;
+    }
+    #coord-legend .cl-row { display: flex; justify-content: space-between; color: rgba(0,255,65,0.5); padding: 2px 0; border-bottom: 1px solid rgba(0,255,65,0.07); }
+    #coord-legend .cl-row:last-child { border-bottom: none; }
+    #coord-legend .cl-val { color: var(--acid); }
+    #coord-legend .cl-origin { color: var(--magenta); }
+    #hover-coord {
+      position: fixed;
+      bottom: 50px;
+      right: 16px;
+      font-size: 11px;
+      color: var(--cyan);
+      letter-spacing: 2px;
+      text-align: right;
+      pointer-events: none;
+      z-index: 300;
+      text-shadow: 0 0 8px var(--cyan);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    /* ── CONTROLS TOOLTIP ── */
+    #controls-tip {
+      position: fixed;
+      top: 50%;
+      right: 16px;
+      transform: translateY(-50%);
+      font-size: 9px;
+      color: rgba(0,255,65,0.35);
+      letter-spacing: 1.5px;
+      line-height: 2;
+      text-align: right;
+      pointer-events: none;
+      z-index: 300;
+    }
+    #controls-tip span { color: var(--cyan); opacity: 0.7; }
+
+    /* ── GLITCH TITLE FLASH ── */
+    #glitch-overlay {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0;
+      animation: introFlash 2.4s ease-out forwards;
+    }
+    #glitch-overlay h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: clamp(28px, 5vw, 64px);
+      font-weight: 900;
+      color: var(--acid);
+      letter-spacing: 12px;
+      text-shadow: 4px 0 #ff1177, -4px 0 #00ddff, 0 0 40px #4422ee;
+      text-align: center;
+    }
+    #glitch-overlay h1 small {
+      display: block;
+      font-size: 0.28em;
+      color: var(--cyan);
+      letter-spacing: 6px;
+      margin-top: 8px;
+      text-shadow: none;
+    }
+    @keyframes introFlash {
+      0%   { opacity: 0; }
+      10%  { opacity: 1; }
+      18%  { opacity: 0.2; }
+      22%  { opacity: 1; }
+      70%  { opacity: 1; }
+      100% { opacity: 0; }
+    }
   </style>
+  <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
 </head>
 <body>
-  <div id="loader">GRID_ZERO // INITIALIZING NEURAL NET...</div>
-  <div id="hud">
-    <div class="hud-line">GRID_ZERO // NEURAL BREACH INITIATED</div>
-    <div class="hud-line">v4.1.9 | NODE STATUS: CONNECTED | SECTOR_7G | UPLINK_OK</div>
-    <div class="hud-line" id="fps-line">FPS: -- | CUBES RENDERED: 0</div>
-    <div class="hud-line">GRID DENSITY: <span id="density">0</span> | ALTITUDE: <span id="alt">0.00</span></div>
-    <div class="hud-line">THREAT LEVEL: <span id="threat">LOW</span> | SECTOR: <span id="sector">[0,0]</span></div>
-    <div class="hud-line" style="margin-top:15px; opacity:0.6;">LMB DRAG ROTATE | RMB DRAG PAN | SCROLL ZOOM</div>
+
+  <!-- CORNER BRACKETS -->
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+
+  <!-- INTRO GLITCH TITLE -->
+  <div id="glitch-overlay">
+    <h1>GRID_ZERO<small>NEURAL BREACH INITIATED</small></h1>
   </div>
-  <div id="canvas-container"></div>
 
-  <script type="module">
-    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
-    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js';
+  <!-- HEADER -->
+  <div id="header">
+    <div class="logo">GRID<span>_</span>ZERO <span>//</span> v4.2.0</div>
+    <div class="status">NODE STATUS: <em>CONNECTED</em> &nbsp;|&nbsp; SECTOR_7G &nbsp;|&nbsp; UPLINK_OK</div>
+    <div class="status" id="fps-display">FPS: --</div>
+  </div>
 
-    // 🔹 CONFIG
-    const CONFIG = {
-      gridSize: 40,
-      cubeSpacing: 2,
-      maxInstances: 40 * 40,
-      renderDistance: 60,
-      updateThrottle: 16, // ~60fps DOM update cap
-      pixelRatioCap: 2
-    };
+  <!-- LEFT PANEL -->
+  <div id="panel">
+    <div class="row">
+      <span class="label">CUBES RENDERED</span>
+      <span class="val" id="cube-count">0</span>
+    </div>
+    <div class="row">
+      <span class="label">GRID DENSITY</span>
+      <div class="bar-wrap"><div class="bar-fill" id="density-bar" style="width:0%"></div></div>
+    </div>
+    <div class="row">
+      <span class="label">CAM_X</span>
+      <span class="val med" id="cam-x">0.00</span>
+    </div>
+    <div class="row">
+      <span class="label">CAM_Z</span>
+      <span class="val med" id="cam-z">0.00</span>
+    </div>
+    <div class="row">
+      <span class="label">ALTITUDE</span>
+      <span class="val" id="cam-y">0.00</span>
+    </div>
+    <div class="row">
+      <span class="label">ANOMALIES</span>
+      <span class="val hi" id="anomaly-count">0</span>
+    </div>
+    <div class="row">
+      <span class="label">THREAT LEVEL</span>
+      <span class="val hi" id="threat">LOW</span>
+    </div>
+  </div>
 
-    // 🔹 DOM CACHE (prevents repeated querySelector)
-    const dom = {
-      fps: document.getElementById('fps-line'),
-      cubes: document.getElementById('fps-line'),
-      density: document.getElementById('density'),
-      alt: document.getElementById('alt'),
-      threat: document.getElementById('threat'),
-      sector: document.getElementById('sector'),
-      loader: document.getElementById('loader')
-    };
+  <!-- MINI LOG -->
+  <div id="log"></div>
 
-    // 🔹 THREE.JS SETUP
-    const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x000510, 0.015);
+  <!-- COORDS BOTTOM RIGHT -->
+  <div id="coords">
+    <div id="coord-line">SECTOR: [0,0]</div>
+    <div>GRID_ZERO NEURAL NET v4.2</div>
+  </div>
 
-    const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
-    camera.position.set(0, 30, 40);
+  <!-- COORD LEGEND -->
+  <div id="coord-legend">
+    <div class="cl-row"><span>ORIGIN</span><span class="cl-origin">[ 0 , 0 ]</span></div>
+    <div class="cl-row"><span>AXIS X</span><span class="cl-val">→ EAST</span></div>
+    <div class="cl-row"><span>AXIS Y</span><span class="cl-val">↓ SOUTH</span></div>
+    <div class="cl-row"><span>HOVER BLOCK</span><span class="cl-val" id="legend-hover">—</span></div>
+    <div class="cl-row"><span>LABELS</span><span class="cl-val" id="label-mode-txt">AUTO</span></div>
+  </div>
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, CONFIG.pixelRatioCap));
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    document.getElementById('canvas-container').appendChild(renderer.domElement);
+  <!-- HOVER COORD DISPLAY -->
+  <div id="hover-coord">BLOCK [ — , — ]</div>
 
-    // 🔹 LIGHTS
-    const ambient = new THREE.AmbientLight(0x0a2a4a, 0.5);
-    scene.add(ambient);
-    const dir = new THREE.DirectionalLight(0x00ffff, 1.2);
-    dir.position.set(10, 20, 10);
-    scene.add(dir);
+  <!-- CONTROLS -->
+  <div id="controls-tip">
+    <span>LMB DRAG</span> ROTATE<br>
+    <span>RMB DRAG</span> PAN / TRAVEL<br>
+    <span>SCROLL</span> ZOOM
+  </div>
 
-    // 🔹 INSTANCED GRID (MASSIVE PERFORMANCE BOOST)
-    const geo = new THREE.BoxGeometry(0.9, 0.9, 0.9);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x004466, emissive: 0x001133, roughness: 0.3, metalness: 0.8 });
-    const grid = new THREE.InstancedMesh(geo, mat, CONFIG.maxInstances);
-    grid.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+<script type="module">
+import * as THREE from 'three';
+import { MapControls }   from 'three/addons/controls/MapControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }     from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
-    const dummy = new THREE.Object3D();
-    let visibleCount = 0;
-    const gridData = [];
+// ─── SCENE ───────────────────────────────────────────────────────────────────
+const scene    = new THREE.Scene();
+scene.fog      = new THREE.FogExp2(0x00000a, 0.030);
 
-    for (let x = 0; x < CONFIG.gridSize; x++) {
-      for (let z = 0; z < CONFIG.gridSize; z++) {
-        const px = (x - CONFIG.gridSize / 2) * CONFIG.cubeSpacing;
-        const pz = (z - CONFIG.gridSize / 2) * CONFIG.cubeSpacing;
-        dummy.position.set(px, 0, pz);
-        dummy.updateMatrix();
-        grid.setMatrixAt(visibleCount, dummy.matrix);
-        gridData.push({ x: px, z: pz, baseY: 0, active: false });
-        visibleCount++;
+const camera   = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 160);
+camera.position.set(14, 11, 14);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+document.body.appendChild(renderer.domElement);
+
+// ─── CSS2D LABEL RENDERER ─────────────────────────────────────────────────────
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(innerWidth, innerHeight);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0';
+labelRenderer.domElement.style.pointerEvents = 'none';
+document.body.appendChild(labelRenderer.domElement);
+
+// ─── CONTROLS ────────────────────────────────────────────────────────────────
+const controls           = new MapControls(camera, renderer.domElement);
+controls.enableDamping   = true;
+controls.dampingFactor   = 0.07;
+controls.maxPolarAngle   = Math.PI / 2 - 0.08;
+controls.zoomSpeed       = 1.2;
+controls.panSpeed        = 0.9;
+
+// ─── BLOOM ───────────────────────────────────────────────────────────────────
+const renderPass = new RenderPass(scene, camera);
+const bloomPass  = new UnrealBloomPass(
+  new THREE.Vector2(innerWidth * 0.75, innerHeight * 0.75),
+  1.4, 0.6, 0.15 // Tweaked to make cores glow bright but keep glass crisp
+);
+
+const composer = new EffectComposer(renderer);
+composer.addPass(renderPass);
+composer.addPass(bloomPass);
+
+// ─── PREMIUM CYBERPUNK MATERIALS ─────────────────────────────────────────────
+// Premium glassy transparent cubes, with bright internal cores
+
+const baseGlass = {
+  roughness:         0.05,
+  metalness:         0.1,
+  transmission:      0.96, // Highly transmissive
+  thickness:         1.2,  // Internal refraction
+  transparent:       true,
+  opacity:           1.0,
+  clearcoat:         1.0,  // Glossy finish
+  clearcoatRoughness:0.05,
+  ior:               1.55,
+  side:              THREE.FrontSide, // Front side renders cleaner solid glass
+  depthWrite:        false,
+};
+
+const MAT = {
+  def:     new THREE.MeshPhysicalMaterial({ ...baseGlass, color: 0x06091a }),
+  cyan:    new THREE.MeshPhysicalMaterial({ ...baseGlass, color: 0x001828 }),
+  magenta: new THREE.MeshPhysicalMaterial({ ...baseGlass, color: 0x200010 }),
+  amber:   new THREE.MeshPhysicalMaterial({ ...baseGlass, color: 0x001800 }),
+};
+
+// Glowing internal data cores
+const CORE_MAT = {
+  def:     new THREE.MeshStandardMaterial({ color: 0x2244ff, emissive: 0x1122aa, emissiveIntensity: 1.5, wireframe: true }),
+  cyan:    new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ddff, emissiveIntensity: 5.0 }),
+  magenta: new THREE.MeshStandardMaterial({ color: 0xff0088, emissive: 0xff1177, emissiveIntensity: 5.0 }),
+  amber:   new THREE.MeshStandardMaterial({ color: 0x88ff00, emissive: 0x44ff22, emissiveIntensity: 5.0 }),
+};
+
+// Thin holographic wireframe edges overlaying the glass
+const EDGE = {
+  def:     new THREE.LineBasicMaterial({ color: 0x4422ee, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending }),
+  cyan:    new THREE.LineBasicMaterial({ color: 0x00eeff, transparent: true, opacity: 0.50, blending: THREE.AdditiveBlending }),
+  magenta: new THREE.LineBasicMaterial({ color: 0xff1177, transparent: true, opacity: 0.50, blending: THREE.AdditiveBlending }),
+  amber:   new THREE.LineBasicMaterial({ color: 0x33ff55, transparent: true, opacity: 0.50, blending: THREE.AdditiveBlending }),
+};
+
+// ─── FLOOR – reflective dark grid ────────────────────────────────────────────
+const floorMat  = new THREE.MeshStandardMaterial({ color: 0x010105, roughness: 0.05, metalness: 0.95 });
+const floor     = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), floorMat);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -0.6;
+scene.add(floor);
+
+const gridHelper = new THREE.GridHelper(600, 400, 0x2211aa, 0x2211aa);
+gridHelper.position.y = -0.59;
+gridHelper.material.opacity = 0.08;
+gridHelper.material.transparent = true;
+scene.add(gridHelper);
+
+// ─── LIGHTING ────────────────────────────────────────────────────────────────
+scene.add(new THREE.AmbientLight(0x060618, 0.8)); // Subtle ambient
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0x4433ff, 0.5); // Environmental reflection for clearcoat
+scene.add(hemiLight);
+const dirLight = new THREE.DirectionalLight(0x6644ff, 1.2);
+scene.add(dirLight);
+const accentLight = new THREE.PointLight(0x00ccff, 3.0, 32);
+scene.add(accentLight);
+
+// ─── GEOMETRY POOL ───────────────────────────────────────────────────────────
+const spacing       = 1.4;
+const OUTER_GEO     = new RoundedBoxGeometry(0.96, 0.96, 0.96, 2, 0.06); // Premium rounded cube
+const INNER_GEO     = new THREE.IcosahedronGeometry(0.24, 0); // Sci-Fi data core
+const EDGES_GEO     = new THREE.EdgesGeometry(new THREE.BoxGeometry(0.96, 0.96, 0.96)); // Sharp edges overlay
+const cubePool      = [];
+const activeCubes   = new Map();
+const CHECK_RADIUS  = 36;   // tighter = faster
+const BOUNDING_R    = spacing * 0.866;
+
+// ─── LABEL SETTINGS ──────────────────────────────────────────────────────────
+const LABEL_ZOOM_THRESHOLD = 22; // camera Y below this → show labels
+let labelsVisible = false;
+
+function makeLabelEl(cx, cz) {
+  const isOrigin = (cx === 0 && cz === 0);
+  const div = document.createElement('div');
+  div.style.cssText = `
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 8px;
+    letter-spacing: 1px;
+    pointer-events: none;
+    white-space: nowrap;
+    text-align: center;
+    line-height: 1.3;
+    padding: 1px 3px;
+    border-radius: 2px;
+  `;
+  if (isOrigin) {
+    div.style.color = '#ff1177';
+    div.style.textShadow = '0 0 6px #ff1177';
+    div.style.background = 'rgba(10,0,20,0.7)';
+    div.style.border = '1px solid #ff117744';
+    div.innerHTML = `<span style="font-size:6px;opacity:0.7">ORIGIN</span><br>[0,0]`;
+  } else {
+    div.style.color = '#4422ee';
+    div.style.textShadow = '0 0 4px #6644ff';
+    div.style.opacity = '0.75';
+    div.textContent = `[${cx},${cz}]`;
+  }
+  return div;
+}
+
+function getCube() {
+  if (cubePool.length) return cubePool.pop();
+  const g = new THREE.Group();
+  
+  const outer = new THREE.Mesh(OUTER_GEO, MAT.def);
+  const inner = new THREE.Mesh(INNER_GEO, CORE_MAT.def);
+  const line = new THREE.LineSegments(EDGES_GEO, EDGE.def);
+  
+  g.add(outer); 
+  g.add(inner);
+  g.add(line);
+  
+  // Store references and random offset for staggered animations
+  g.userData = { outer, inner, line, label: null, rand: Math.random() * Math.PI * 2 };
+  return g;
+}
+
+// deterministic tile type
+function tileType(x, z) {
+  const h = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453);
+  const f = h - Math.floor(h);
+  if (f < 0.004) return 'magenta';
+  if (f < 0.012) return 'amber';
+  if (f < 0.025) return 'cyan';
+  return 'def';
+}
+
+// ─── FRUSTUM ─────────────────────────────────────────────────────────────────
+const frustum     = new THREE.Frustum();
+const projMatrix  = new THREE.Matrix4();
+const _sphere     = new THREE.Sphere();
+const _center     = new THREE.Vector3();
+
+// ─── UI REFS ─────────────────────────────────────────────────────────────────
+const elCubes    = document.getElementById('cube-count');
+const elDensity  = document.getElementById('density-bar');
+const elCamX     = document.getElementById('cam-x');
+const elCamZ     = document.getElementById('cam-z');
+const elCamY     = document.getElementById('cam-y');
+const elAnom     = document.getElementById('anomaly-count');
+const elThreat   = document.getElementById('threat');
+const elFps      = document.getElementById('fps-display');
+const elCoord    = document.getElementById('coord-line');
+const elLog      = document.getElementById('log');
+
+// ─── LOG SYSTEM ──────────────────────────────────────────────────────────────
+const LOG_MSGS = [
+  'SCANNING NODE CLUSTER…',
+  'PACKET TRACE REROUTED',
+  'FIREWALL BYPASS: <span class="hi">SUCCESS</span>',
+  'ICE LAYER DETECTED — PROBING',
+  'DATA SHARD EXTRACTED',
+  'KERNEL ACCESS GRANTED',
+  'MEMORY DUMP COMPLETE',
+  'INTRUSION VECTOR UPDATED',
+  'DECRYPTING PAYLOAD…',
+  'GHOST PROTOCOL ACTIVE',
+  'LAYER 7 BREACH CONFIRMED',
+  'DARKNET RELAY ESTABLISHED',
+  'SUBNET CRAWL IN PROGRESS',
+  'ROOT ACCESS: <span class="hi">PENDING</span>',
+];
+let logTimer = 0;
+function pushLog() {
+  if (elLog.children.length > 6) elLog.removeChild(elLog.firstChild);
+  const d = new Date();
+  const ts = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+  const msg = LOG_MSGS[Math.floor(Math.random() * LOG_MSGS.length)];
+  const ln  = document.createElement('div');
+  ln.className = 'log-line';
+  ln.innerHTML = `<span class="ts">[${ts}]</span> ${msg}`;
+  elLog.appendChild(ln);
+}
+
+// ─── FPS COUNTER ─────────────────────────────────────────────────────────────
+let fpsFrames = 0, fpsLast = performance.now(), fps = 60;
+
+// ─── UI THROTTLE ─────────────────────────────────────────────────────────────
+let uiTick = 0;
+let anomalies = 0;
+const MAX_DENSITY = 1600;
+
+// ─── ANIMATE ─────────────────────────────────────────────────────────────────
+function animate(now) {
+  requestAnimationFrame(animate);
+  controls.update();
+  const time = now * 0.001;
+
+  // FPS
+  fpsFrames++;
+  if (now - fpsLast >= 500) {
+    fps = Math.round(fpsFrames * 1000 / (now - fpsLast));
+    fpsFrames = 0; fpsLast = now;
+    elFps.textContent = `FPS: ${fps}`;
+    elFps.style.color = fps < 30 ? '#ff1177' : fps < 50 ? '#8866ff' : '#4422ee';
+  }
+
+  // Moving floor + lights
+  floor.position.x      = camera.position.x;
+  floor.position.z      = camera.position.z;
+  gridHelper.position.x = camera.position.x;
+  gridHelper.position.z = camera.position.z;
+  dirLight.position.set(camera.position.x + 8, 18, camera.position.z + 8);
+  accentLight.position.set(camera.position.x + Math.sin(time * 0.5) * 12, 5, camera.position.z + Math.cos(time * 0.5) * 12);
+
+  // Frustum
+  camera.updateMatrixWorld();
+  projMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  frustum.setFromProjectionMatrix(projMatrix);
+
+  const minX = Math.floor((camera.position.x - CHECK_RADIUS) / spacing);
+  const maxX = Math.ceil ((camera.position.x + CHECK_RADIUS) / spacing);
+  const minZ = Math.floor((camera.position.z - CHECK_RADIUS) / spacing);
+  const maxZ = Math.ceil ((camera.position.z + CHECK_RADIUS) / spacing);
+
+  const visible = new Set();
+  let rendered = 0;
+
+  for (let i = minX; i <= maxX; i++) {
+    for (let j = minZ; j <= maxZ; j++) {
+      const px = i * spacing, pz = j * spacing;
+      const dx = camera.position.x - px, dz = camera.position.z - pz;
+      if (dx*dx + dz*dz > CHECK_RADIUS * CHECK_RADIUS) continue;
+
+      _center.set(px, 0, pz);
+      _sphere.set(_center, BOUNDING_R);
+      if (!frustum.intersectsSphere(_sphere)) continue;
+
+      const key = `${i},${j}`;
+      visible.add(key);
+      rendered++;
+
+      if (!activeCubes.has(key)) {
+        const cube = getCube();
+        cube.position.set(px, 0, pz);
+        const type = tileType(i, j);
+        
+        cube.userData.outer.material = MAT[type];
+        cube.userData.inner.material = CORE_MAT[type];
+        cube.userData.line.material = EDGE[type];
+        cube.userData.cx = i;
+        cube.userData.cz = j;
+        cube.userData.type = type;
+
+        // attach coordinate label
+        const labelEl = makeLabelEl(i, j);
+        const labelObj = new CSS2DObject(labelEl);
+        labelObj.position.set(0, 0.65, 0); // sit slightly higher on premium cube
+        cube.add(labelObj);
+        cube.userData.label = labelObj;
+        labelEl.style.display = labelsVisible ? '' : 'none';
+
+        scene.add(cube);
+        activeCubes.set(key, cube);
+        if (type !== 'def') anomalies++;
       }
     }
-    grid.count = visibleCount;
-    scene.add(grid);
+  }
 
-    // 🔹 CONTROLS (THROTTLED)
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.minDistance = 5;
-    controls.maxDistance = 100;
-
-    // 🔹 PERFORMANCE MONITORING
-    let frameCount = 0, lastTime = performance.now(), fps = 0;
-    let lastDomUpdate = 0;
-
-    // 🔹 RENDER LOOP
-    function animate(time) {
-      requestAnimationFrame(animate);
-      controls.update();
-
-      // FPS Calc
-      frameCount++;
-      if (time >= lastTime + 1000) {
-        fps = frameCount;
-        frameCount = 0;
-        lastTime = time;
+  // Cull & Animate Visible
+  for (const [key, g] of activeCubes) {
+    if (!visible.has(key)) {
+      if (g.userData.label) {
+        g.remove(g.userData.label);
+        g.userData.label = null;
       }
-
-      // Distance-based visibility & smooth height animation
-      const camPos = camera.position;
-      const camDist = Math.sqrt(camPos.x ** 2 + camPos.z ** 2);
-      let visible = 0;
-
-      for (let i = 0; i < gridData.length; i++) {
-        const d = gridData[i];
-        const dist = Math.hypot(d.x - camPos.x, d.z - camPos.z);
-        const inRange = dist < CONFIG.renderDistance;
-
-        if (inRange) {
-          dummy.position.set(d.x, Math.sin(time * 0.001 + i * 0.1) * 0.5, d.z);
-          dummy.updateMatrix();
-          grid.setMatrixAt(i, dummy.matrix);
-          visible++;
-        } else {
-          // Move out of view to hide efficiently
-          dummy.position.set(d.x, -1000, d.z);
-          dummy.updateMatrix();
-          grid.setMatrixAt(i, dummy.matrix);
-        }
+      scene.remove(g);
+      cubePool.push(g);
+      activeCubes.delete(key);
+    } else {
+      // Animate the internal data cores
+      g.userData.inner.rotation.x = time * 0.8 + g.userData.rand;
+      g.userData.inner.rotation.y = time * 1.2 + g.userData.rand;
+      
+      // Pulse scale for anomalies
+      if (g.userData.type !== 'def') {
+        const pulse = 1.05 + Math.sin(time * 3.0 + g.userData.rand) * 0.15;
+        g.userData.inner.scale.setScalar(pulse);
+      } else {
+        g.userData.inner.scale.setScalar(0.65); // standard core size
       }
-      grid.instanceMatrix.needsUpdate = true;
-
-      // 🔹 THROTTLED DOM UPDATE (prevents layout thrashing)
-      if (time - lastDomUpdate > CONFIG.updateThrottle) {
-        dom.fps.textContent = `FPS: ${fps} | CUBES RENDERED: ${visible}`;
-        dom.density.textContent = Math.round((visible / CONFIG.maxInstances) * 100);
-        dom.alt.textContent = camPos.y.toFixed(2);
-        dom.sector.textContent = `[${Math.round(camPos.x / 10)},${Math.round(camPos.z / 10)}]`;
-        dom.threat.textContent = camPos.y < 15 ? 'HIGH' : 'LOW';
-        lastDomUpdate = time;
-      }
-
-      renderer.render(scene, camera);
     }
+  }
 
-    // 🔹 ASYNC INIT (prevents loading freeze)
-    setTimeout(() => {
-      dom.loader.style.opacity = '0';
-      setTimeout(() => dom.loader.remove(), 500);
-      animate(0);
-    }, 300);
+  // UI update every ~8 frames
+  uiTick++;
+  if (uiTick >= 8) {
+    uiTick = 0;
+    elCubes.textContent   = rendered;
+    elCamX.textContent    = camera.position.x.toFixed(1);
+    elCamZ.textContent    = camera.position.z.toFixed(1);
+    elCamY.textContent    = camera.position.y.toFixed(1);
+    elAnom.textContent    = anomalies;
+    const pct = Math.min(100, Math.round(rendered / MAX_DENSITY * 100));
+    elDensity.style.width = pct + '%';
+    elDensity.style.background = pct > 75 ? '#ff1177' : pct > 50 ? '#8866ff' : '#4422ee';
+    elDensity.style.boxShadow  = `0 0 6px ${pct > 75 ? '#ff1177' : '#4422ee'}`;
+    const threat = rendered > 900 ? 'CRITICAL' : rendered > 500 ? 'ELEVATED' : 'LOW';
+    elThreat.textContent  = threat;
+    elThreat.className    = 'val' + (threat==='CRITICAL'?' hi':threat==='ELEVATED'?' med':'');
+    const sx = Math.floor(camera.position.x / 10), sz = Math.floor(camera.position.z / 10);
+    elCoord.textContent   = `SECTOR: [${sx},${sz}]`;
+  }
 
-    // 🔹 RESIZE HANDLER
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-  </script>
+  // Log every ~3s
+  logTimer += 16;
+  if (logTimer > 3000 + Math.random() * 2000) {
+    logTimer = 0;
+    pushLog();
+  }
+
+  // ── Label visibility based on zoom ──
+  const shouldShowLabels = camera.position.y < LABEL_ZOOM_THRESHOLD;
+  if (shouldShowLabels !== labelsVisible) {
+    labelsVisible = shouldShowLabels;
+    document.getElementById('label-mode-txt').textContent = labelsVisible ? 'ON' : 'AUTO';
+    for (const [, g] of activeCubes) {
+      if (g.userData.label) {
+        g.userData.label.element.style.display = labelsVisible ? '' : 'none';
+      }
+    }
+  }
+
+  composer.render();
+  labelRenderer.render(scene, camera);
+}
+
+pushLog();
+animate(performance.now());
+
+// ─── MOUSE HOVER – coordinate detection ──────────────────────────────────────
+const raycaster   = new THREE.Raycaster();
+const mouse       = new THREE.Vector2();
+const groundPlane = new THREE.Plane(new THREE.Vector3(0,1,0), 0);
+const hitPoint    = new THREE.Vector3();
+const elHoverCoord2 = document.getElementById('hover-coord');
+const elLegendHover2 = document.getElementById('legend-hover');
+
+window.addEventListener('mousemove', (e) => {
+  mouse.x =  (e.clientX / innerWidth)  * 2 - 1;
+  mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  if (raycaster.ray.intersectPlane(groundPlane, hitPoint)) {
+    const hx = Math.round(hitPoint.x / spacing);
+    const hz = Math.round(hitPoint.z / spacing);
+    const label = (hx === 0 && hz === 0) ? `[0,0] ◈ ORIGIN` : `[${hx},${hz}]`;
+    elHoverCoord2.textContent = `BLOCK ${label}`;
+    elHoverCoord2.style.opacity = '1';
+    elHoverCoord2.style.color = (hx===0&&hz===0) ? '#ff1177' : '#00ddff';
+    elHoverCoord2.style.textShadow = (hx===0&&hz===0) ? '0 0 8px #ff1177' : '0 0 8px #00ddff';
+    elLegendHover2.textContent = label;
+  }
+});
+window.addEventListener('mouseleave', () => {
+  elHoverCoord2.style.opacity = '0';
+  elLegendHover2.textContent = '—';
+});
+
+// ─── RESIZE ──────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+  labelRenderer.setSize(innerWidth, innerHeight);
+});
+</script>
 </body>
 </html>
-
